@@ -255,6 +255,20 @@ function cardTx(m){return txIn(m).filter(function(t){return t.type==='gasto'&&ca
 function cardFixed(){return act('fixed').filter(function(f){return f.active&&f.type==='gasto'&&cardMatch(f.account);});}
 function sumAmt(l){return l.reduce(function(s,t){return s+Number(t.amount||0);},0);}
 
+/* ----- Cuenta elegida en el Resumen ----- */
+function resAcct(){var v=settings.resumenAcct;return v==null||v===''?'Cuenta bancaria':v;}
+function resMatch(acct){var a=resAcct();return a==='__all'||norm(acct)===norm(a);}
+function resTx(m){return txIn(m).filter(function(t){return resMatch(t.account);});}
+function resOptions(){
+  var sel=resAcct(),opts=[['Cuenta bancaria','🏦 Cuenta bancaria']];
+  act('cards').forEach(function(c){opts.push([c.name,'💳 '+c.name]);});
+  accounts().forEach(function(a){if(norm(a)!=='cuenta bancaria'&&!isCardName(a))opts.push([a,a]);});
+  opts.push(['__all','Todas las cuentas']);
+  var found=opts.some(function(o){return o[0]==='__all'?sel==='__all':norm(o[0])===norm(sel);});
+  if(!found)opts.unshift([sel,sel]);
+  return opts.map(function(o){var on=o[0]==='__all'?sel==='__all':norm(o[0])===norm(sel);return '<option value="'+esc(o[0])+'"'+(on?' selected':'')+'>'+esc(o[1])+'</option>';}).join('');
+}
+
 /* ================= Gráficos (SVG) ================= */
 function donut(items,tot){
   if(!tot)return '<div class="empty">Sin gastos en este mes</div>';
@@ -287,29 +301,45 @@ function emptyCard(msg){return '<div class="empty">'+msg+'</div>';}
 
 var views={
 resumen:function(){
-  var m=ui.month,list=txIn(m),inc=total(list,'ingreso'),exp=total(list,'gasto'),bal=inc-exp,rate=inc>0?Math.round(bal/inc*100):0;
-  var prevExp=total(txIn(shiftMonth(m,-1)),'gasto'),ch=pctChange(exp,prevExp);
+  var m=ui.month,sel=resAcct(),isCard=isCardName(sel),all=sel==='__all';
+  var list=resTx(m),inc=total(list,'ingreso'),exp=total(list,'gasto'),bal=inc-exp,rate=inc>0?Math.round(bal/inc*100):0;
+  var prevExp=total(resTx(shiftMonth(m,-1)),'gasto'),ch=pctChange(exp,prevExp);
   var cats=byCategory(list),top=cats.slice(0,6).map(function(c){return {name:c.name,v:c.v,color:catColor(c.name)};});
   var rest=cats.slice(6).reduce(function(s,c){return s+c.v;},0);if(rest>0)top.push({name:'Otras',v:rest,color:'#94a3b8'});
-  var months=lastMonths(m,6).map(function(x){var l=txIn(x);return {m:x,inc:total(l,'ingreso'),exp:total(l,'gasto')};});
-  var pend=act('fixed').filter(function(f){return f.active&&fixedStatus(f,m)!=='pagado';}).sort(function(a,b){return a.day-b.day;});
+  var months=lastMonths(m,6).map(function(x){
+    var l=resTx(x),g=l.filter(function(t){return t.type==='gasto';}),r=sumAmt(g.filter(function(t){return t.fixedId;}));
+    return {m:x,inc:total(l,'ingreso'),exp:total(l,'gasto'),a:r,b:sumAmt(g)-r};
+  });
+  var withData=months.filter(function(x){return x.exp>0;});
+  var avg=withData.length?withData.reduce(function(s,x){return s+x.exp;},0)/withData.length:0;
+  var cur=months[months.length-1];
+  var pend=act('fixed').filter(function(f){return f.active&&fixedStatus(f,m)!=='pagado'&&resMatch(f.account);}).sort(function(a,b){return a.day-b.day;});
   var buds=act('budgets').map(function(b){return {b:b,spent:spentIn(b.category,m)};}).sort(function(a,b){return b.spent/(b.b.limit||1)-a.spent/(a.b.limit||1);}).slice(0,4);
   var goals=act('goals').slice(0,3);
   var recent=list.slice().sort(cmpTx).slice(0,6);
-  var h='';
+  var h='<div class="tools"><label style="margin:0;flex:1;min-width:200px">Ver resumen de<select id="racct">'+resOptions()+'</select></label></div>';
   if(!act('transactions').length)h+='<div class="card" style="margin-bottom:14px"><h3>👋 Bienvenido a FinanzasApp</h3><p class="note" style="margin:0">Toca el botón <b>+</b> para registrar tu primer ingreso o gasto. En <b>Fijos</b> puedes cargar tus pagos mensuales y en <b>Presupuestos</b> poner límites por categoría. Conecta Google Sheets en <b>Ajustes</b> para guardar todo en DataFinanzasApp.</p></div>';
-  h+='<div class="grid g4" style="margin-bottom:14px">'+
-   '<div class="card kpi"><small>Ingresos</small><b class="in">'+money(inc)+'</b></div>'+
-   '<div class="card kpi"><small>Gastos</small><b class="out">'+money(exp)+'</b><em>'+(ch===null?'&nbsp;':(ch>0?'↑ ':'↓ ')+Math.abs(ch)+'% vs mes anterior')+'</em></div>'+
-   '<div class="card kpi"><small>Balance</small><b class="'+(bal<0?'neg':'')+'">'+money(bal)+'</b></div>'+
-   '<div class="card kpi"><small>Ahorro del mes</small><b class="'+(rate<0?'neg':'')+'">'+(inc>0?rate+'%':'—')+'</b><em>de tus ingresos</em></div></div>';
+  var chTxt='<em>'+(ch===null?'&nbsp;':(ch>0?'↑ ':'↓ ')+Math.abs(ch)+'% vs mes anterior')+'</em>';
+  if(isCard){
+    h+='<div class="grid g4" style="margin-bottom:14px">'+
+     '<div class="card kpi"><small>Gasto del mes</small><b class="out">'+money(exp)+'</b>'+chTxt+'</div>'+
+     '<div class="card kpi"><small>Promedio mensual</small><b>'+money(avg)+'</b><em>'+(withData.length?'últimos '+withData.length+(withData.length===1?' mes con gasto':' meses con gasto'):'sin datos todavía')+'</em></div>'+
+     '<div class="card kpi"><small>Recurrentes del mes</small><b>'+money(cur.a)+'</b><em>suscripciones y pagos automáticos</em></div>'+
+     '<div class="card kpi"><small>Compras del mes</small><b>'+money(cur.b)+'</b><em>sin contar recurrentes</em></div></div>';
+  }else{
+    h+='<div class="grid g4" style="margin-bottom:14px">'+
+     '<div class="card kpi"><small>Ingresos</small><b class="in">'+money(inc)+'</b></div>'+
+     '<div class="card kpi"><small>Gastos</small><b class="out">'+money(exp)+'</b>'+chTxt+'</div>'+
+     '<div class="card kpi"><small>Balance</small><b class="'+(bal<0?'neg':'')+'">'+money(bal)+'</b></div>'+
+     '<div class="card kpi"><small>Ahorro del mes</small><b class="'+(rate<0?'neg':'')+'">'+(inc>0?rate+'%':'—')+'</b><em>de tus ingresos</em></div></div>';
+  }
   h+='<div class="grid g2" style="margin-bottom:14px">';
   h+='<div class="card"><h3>Gastos por categoría</h3><div class="donutwrap">'+donut(top,exp)+'<div class="legend">'+top.map(function(c){return '<div><i style="background:'+c.color+'"></i><span>'+esc(c.name)+'</span><b>'+Math.round(c.v/exp*100)+'%</b></div>';}).join('')+'</div></div></div>';
-  h+='<div class="card"><h3>Últimos 6 meses</h3>'+bars(months)+'</div></div>';
+  h+='<div class="card"><h3>Últimos 6 meses</h3>'+(isCard?bars(months,{a:'a',b:'b',al:'Recurrentes',bl:'Compras',ac:'var(--brand)',bc:'var(--out)'}):bars(months))+'</div></div>';
   h+='<div class="grid g2" style="margin-bottom:14px">';
   h+='<div class="card"><h3>Fijos pendientes <small>'+pend.length+' por registrar</small></h3>'+(pend.length?pend.slice(0,5).map(function(f){var st=fixedStatus(f,m);return '<div class="row"><span class="ic">'+catIcon(f.category)+'</span><span class="grow"><b>'+esc(f.name)+'</b><small>Día '+esc(f.day)+' · '+(f.type==='gasto'?'gasto':'ingreso')+'</small></span><span class="pill '+st+'">'+st+'</span><b class="amt">'+money(f.amount)+'</b><button class="btn sm" data-a="payFixed" data-id="'+esc(f.id)+'">Registrar</button></div>';}).join(''):emptyCard(act('fixed').length?'Todo al día este mes ✓':'Aún no tienes gastos fijos'))+'</div>';
-  h+='<div class="card"><h3>Presupuestos <small>'+monthLabel(m)+'</small></h3>'+(buds.length?buds.map(function(x){var l=x.b.limit;return '<div style="padding:7px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>'+catIcon(x.b.category)+' '+esc(x.b.category)+'</span><span class="'+(x.spent>l?'neg':'')+'"><b>'+money(x.spent)+'</b> / '+money(l)+'</span></div>'+progress(x.spent,l)+'</div>';}).join(''):emptyCard('Define límites en <b>Presupuestos</b>'))+'</div></div>';
-  h+='<div class="grid g2"><div class="card"><h3>Movimientos recientes <button class="btn sm" data-a="goto" data-v="movimientos">Ver todos</button></h3>'+(recent.length?recent.map(txRow).join(''):emptyCard('Sin movimientos en este mes'))+'</div>';
+  h+='<div class="card"><h3>Presupuestos <small>'+monthLabel(m)+(all?'':' · todas las cuentas')+'</small></h3>'+(buds.length?buds.map(function(x){var l=x.b.limit;return '<div style="padding:7px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>'+catIcon(x.b.category)+' '+esc(x.b.category)+'</span><span class="'+(x.spent>l?'neg':'')+'"><b>'+money(x.spent)+'</b> / '+money(l)+'</span></div>'+progress(x.spent,l)+'</div>';}).join(''):emptyCard('Define límites en <b>Presupuestos</b>'))+'</div></div>';
+  h+='<div class="grid g2"><div class="card"><h3>Movimientos recientes <button class="btn sm" data-a="goto" data-v="movimientos">Ver todos</button></h3>'+(recent.length?recent.map(txRow).join(''):emptyCard('Sin movimientos de esta cuenta en el mes'))+'</div>';
   h+='<div class="card"><h3>Metas de ahorro <button class="btn sm" data-a="goto" data-v="metas">Ver</button></h3>'+(goals.length?goals.map(function(g){var p=g.target>0?Math.min(100,g.saved/g.target*100):0;return '<div style="padding:7px 0"><div style="display:flex;justify-content:space-between"><span>🏁 '+esc(g.name)+'</span><b>'+Math.round(p)+'%</b></div>'+progress(g.saved,g.target)+'</div>';}).join(''):emptyCard('Crea tu primera meta de ahorro'))+'</div></div>';
   return h;
 },
@@ -686,6 +716,7 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){
   var t=e.target;
+  if(t.id==='racct'){settings.resumenAcct=t.value;saveSettings();render();return;}
   if(t.name==='accountSel'){var inp=t.form.elements.accountNew;inp.style.display=t.value==='__new'?'block':'none';if(t.value==='__new')inp.focus();return;}
   if(t.id==='fcat'){ui.fcat=t.value;$('#txList').innerHTML=txListHtml();return;}
   if(t.dataset&&t.dataset.set){
