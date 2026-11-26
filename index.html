@@ -236,11 +236,13 @@ function payFixed(f,m){
   put('transactions',{id:uid('t'),date:fixedDate(f,m),type:f.type,amount:Number(f.amount),category:f.category,description:f.name,account:f.account||'',fixedId:f.id});
 }
 function accounts(){
-  var s={'Efectivo':1,'Cuenta bancaria':1,'Tarjeta de crédito':1,'Billetera digital':1};
-  act('transactions').forEach(function(t){if(t.account)s[t.account]=1;});
-  act('fixed').forEach(function(t){if(t.account)s[t.account]=1;});
-  act('cards').forEach(function(c){s[c.name]=1;});
-  return Object.keys(s);
+  var seen={},out=[];
+  function add(n){n=String(n==null?'':n).trim();if(!n)return;var k=n.toLowerCase();if(seen[k])return;seen[k]=1;out.push(n);}
+  act('cards').forEach(function(c){add(c.name);});
+  ['Efectivo','Cuenta bancaria','Tarjeta de crédito','Billetera digital'].forEach(add);
+  act('transactions').forEach(function(t){add(t.account);});
+  act('fixed').forEach(function(t){add(t.account);});
+  return out;
 }
 function lastAccount(){var t=act('transactions').sort(cmpTx)[0];return t&&t.account?t.account:'';}
 function pctChange(cur,prev){if(!prev)return null;return Math.round((cur-prev)/prev*100);}
@@ -474,6 +476,13 @@ function catOptions(type,selected){
 }
 function segHtml(type){return '<div class="seg"><button type="button" data-a="segType" data-v="gasto" class="'+(type==='gasto'?'on':'')+'">Gasto</button><button type="button" data-a="segType" data-v="ingreso" class="'+(type==='ingreso'?'on':'')+'">Ingreso</button></div><input type="hidden" name="type" value="'+type+'">';}
 function acctList(){return '<datalist id="accts">'+accounts().map(function(a){return '<option value="'+esc(a)+'">';}).join('')+'</datalist>';}
+function acctSelect(sel){
+  sel=sel||'';var list=accounts();
+  if(sel&&list.map(norm).indexOf(norm(sel))<0)list.unshift(sel);
+  list.sort(function(a,b){return (isCardName(a)?0:1)-(isCardName(b)?0:1)||a.localeCompare(b);});
+  return '<label>Cuenta o medio de pago<select name="accountSel"><option value="">Sin cuenta</option>'+list.map(function(a){return '<option value="'+esc(a)+'"'+(norm(a)===norm(sel)?' selected':'')+'>'+(isCardName(a)?'💳 ':'')+esc(a)+'</option>';}).join('')+'<option value="__new">➕ Otra cuenta…</option></select></label><input name="accountNew" maxlength="40" placeholder="Nombre de la cuenta o tarjeta" style="display:none;margin:-6px 0 12px">';
+}
+function acctVal(f){return f.accountSel.value==='__new'?f.accountNew.value.trim():f.accountSel.value;}
 function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}
 
 function openTx(t){
@@ -482,7 +491,7 @@ function openTx(t){
   openModal('<h3>'+(isNew?'Nuevo movimiento':'Editar movimiento')+'</h3><form id="f" autocomplete="off">'+segHtml(t.type)+
    '<label>Monto<input name="amount" type="number" inputmode="decimal" step="any" min="0" required value="'+esc(t.amount)+'"></label><div class="hint" id="amtHint"></div>'+
    '<label>Categoría<select name="category">'+catOptions(t.type,t.category)+'</select></label>'+
-   '<div class="two"><label>Fecha<input name="date" type="date" required value="'+esc(t.date)+'"></label><label>Cuenta o medio de pago<input name="account" list="accts" value="'+esc(t.account)+'"></label></div>'+acctList()+
+   '<label>Fecha<input name="date" type="date" required value="'+esc(t.date)+'"></label>'+acctSelect(t.account)+
    '<label>Descripción<input name="description" maxlength="80" placeholder="Opcional" value="'+esc(t.description)+'"></label>'+
    '<div class="btns">'+(isNew?'':'<button type="button" class="btn danger left" data-a="delTx" data-id="'+esc(t.id)+'">Eliminar</button>')+'<button type="button" class="btn" data-a="closeModal">Cancelar</button>'+(isNew?'<button type="submit" class="btn" data-more="1">Guardar y otro</button>':'')+'<button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
@@ -493,9 +502,9 @@ function openTx(t){
       e.preventDefault();
       var amount=num(f.amount.value);if(amount<=0){toast('Ingresa un monto mayor a 0');return;}
       if(!f.category.value){toast('Crea una categoría primero (Ajustes)');return;}
-      put('transactions',{id:t.id||uid('t'),date:f.date.value,type:f.type.value,amount:amount,category:f.category.value,description:f.description.value.trim(),account:f.account.value.trim(),fixedId:t.fixedId||''});
+      put('transactions',{id:t.id||uid('t'),date:f.date.value,type:f.type.value,amount:amount,category:f.category.value,description:f.description.value.trim(),account:acctVal(f),fixedId:t.fixedId||''});
       toast('Guardado');
-      if(more){openTx({type:f.type.value,date:f.date.value,account:f.account.value});}else closeModal();
+      if(more){openTx({type:f.type.value,date:f.date.value,account:acctVal(f)});}else closeModal();
       render();
     });
   });
@@ -507,14 +516,14 @@ function openFixed(x){
    '<label>Nombre<input name="name" required maxlength="60" placeholder="Arriendo, Netflix, Salario…" value="'+esc(x.name)+'"></label>'+
    '<div class="two"><label>Monto<input name="amount" type="number" inputmode="decimal" step="any" min="0" required value="'+esc(x.amount)+'"></label><label>Día del mes<input name="day" type="number" min="1" max="31" required value="'+esc(x.day)+'"></label></div><div class="hint" id="amtHint"></div>'+
    '<label>Categoría<select name="category">'+catOptions(x.type,x.category)+'</select></label>'+
-   '<label>Cuenta o medio de pago<input name="account" list="accts" value="'+esc(x.account)+'"></label>'+acctList()+
+   acctSelect(x.account)+
    '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="active"'+(x.active?' checked':'')+'> Activo (se incluye cada mes)</label>'+
    '<div class="btns">'+(isNew?'':'<button type="button" class="btn danger left" data-a="delFixed" data-id="'+esc(x.id)+'">Eliminar</button>')+'<button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
     var fm=$('#f'),f=fm.elements;f.name.focus();
     fm.addEventListener('submit',function(e){
       e.preventDefault();var amount=num(f.amount.value);if(amount<=0){toast('Ingresa un monto mayor a 0');return;}
-      put('fixed',{id:x.id||uid('f'),name:f.name.value.trim(),type:f.type.value,amount:amount,day:Math.min(31,Math.max(1,parseInt(f.day.value,10)||1)),category:f.category.value,account:f.account.value.trim(),active:f.active.checked?1:0});
+      put('fixed',{id:x.id||uid('f'),name:f.name.value.trim(),type:f.type.value,amount:amount,day:Math.min(31,Math.max(1,parseInt(f.day.value,10)||1)),category:f.category.value,account:acctVal(f),active:f.active.checked?1:0});
       closeModal();toast('Guardado');render();
     });
   });
@@ -677,6 +686,7 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){
   var t=e.target;
+  if(t.name==='accountSel'){var inp=t.form.elements.accountNew;inp.style.display=t.value==='__new'?'block':'none';if(t.value==='__new')inp.focus();return;}
   if(t.id==='fcat'){ui.fcat=t.value;$('#txList').innerHTML=txListHtml();return;}
   if(t.dataset&&t.dataset.set){
     settings[t.dataset.set]=t.value.trim();saveSettings();
