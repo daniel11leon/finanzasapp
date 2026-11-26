@@ -119,7 +119,8 @@ tfoot td{font-weight:800;border-bottom:0}
   #monthLabel{min-width:0;font-size:14px;padding:0 4px}
   .month button{width:30px}
   .bottom{display:flex;position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:4px 2px calc(4px + env(safe-area-inset-bottom));z-index:15}
-  .bottom .nav{flex-direction:column;gap:0;font-size:10px;padding:5px 0;text-align:center;justify-content:center;border-radius:8px}
+  .bottom .nav{flex-direction:column;gap:0;font-size:9.5px;padding:5px 0;text-align:center;justify-content:center;border-radius:8px;flex:1;min-width:0;width:auto}
+  .bottom .nav span:last-child{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .bottom .nav .i{font-size:19px}
   .fab{bottom:calc(76px + env(safe-area-inset-bottom));right:16px}
   #toast{bottom:150px}
@@ -148,12 +149,12 @@ tfoot td{font-weight:800;border-bottom:0}
 'use strict';
 
 /* ================= Constantes y utilidades ================= */
-var ENT=['transactions','fixed','budgets','goals','categories'];
+var ENT=['transactions','fixed','budgets','goals','categories','cards'];
 var LS_DATA='finanzasapp.data.v1', LS_SET='finanzasapp.settings.v1';
 var CURRENCIES={COP:'es-CO',USD:'en-US',EUR:'es-ES',MXN:'es-MX',ARS:'es-AR',PEN:'es-PE',CLP:'es-CL',BRL:'pt-BR'};
 var ZERO_DEC=['COP','CLP'];
 var MONTHS=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-var NAV=[['resumen','📊','Resumen'],['movimientos','🧾','Movimientos'],['fijos','🔁','Fijos'],['presupuestos','🎯','Presupuestos'],['metas','🏁','Metas'],['reportes','📈','Reportes'],['ajustes','⚙️','Ajustes']];
+var NAV=[['resumen','📊','Resumen'],['movimientos','🧾','Movimientos','Movim.'],['fijos','🔁','Fijos'],['tarjeta','💳','Tarjeta'],['presupuestos','🎯','Presupuestos','Presup.'],['metas','🏁','Metas'],['reportes','📈','Reportes'],['ajustes','⚙️','Ajustes']];
 var DEF_CATS=[
  ['gasto','Alimentación','🛒','#16a34a'],['gasto','Restaurantes','🍽️','#f97316'],['gasto','Transporte','🚌','#0ea5e9'],
  ['gasto','Vivienda','🏠','#8b5cf6'],['gasto','Servicios','💡','#eab308'],['gasto','Salud','🩺','#ef4444'],
@@ -182,7 +183,7 @@ function toast(msg){var t=$('#toast');t.textContent=msg;t.classList.add('show');
 /* ================= Estado ================= */
 var settings=loadSettings();
 var db=loadDB();
-var ui={view:'resumen',month:curMonth(),q:'',ftype:'todos',fcat:''};
+var ui={view:'resumen',month:curMonth(),q:'',ftype:'todos',fcat:'',card:''};
 var nf,nfc;
 setFormats();
 
@@ -238,10 +239,19 @@ function accounts(){
   var s={'Efectivo':1,'Cuenta bancaria':1,'Tarjeta de crédito':1,'Billetera digital':1};
   act('transactions').forEach(function(t){if(t.account)s[t.account]=1;});
   act('fixed').forEach(function(t){if(t.account)s[t.account]=1;});
+  act('cards').forEach(function(c){s[c.name]=1;});
   return Object.keys(s);
 }
 function lastAccount(){var t=act('transactions').sort(cmpTx)[0];return t&&t.account?t.account:'';}
 function pctChange(cur,prev){if(!prev)return null;return Math.round((cur-prev)/prev*100);}
+
+/* ----- Tarjeta de crédito ----- */
+function norm(v){return String(v==null?'':v).trim().toLowerCase();}
+function isCardName(n){n=norm(n);return !!n&&act('cards').some(function(c){return norm(c.name)===n;});}
+function cardMatch(acct){return isCardName(acct)&&(!ui.card||norm(acct)===norm(ui.card));}
+function cardTx(m){return txIn(m).filter(function(t){return t.type==='gasto'&&cardMatch(t.account);});}
+function cardFixed(){return act('fixed').filter(function(f){return f.active&&f.type==='gasto'&&cardMatch(f.account);});}
+function sumAmt(l){return l.reduce(function(s,t){return s+Number(t.amount||0);},0);}
 
 /* ================= Gráficos (SVG) ================= */
 function donut(items,tot){
@@ -250,16 +260,17 @@ function donut(items,tot){
   items.forEach(function(it){var p=it.v/tot*100;c+='<circle cx="21" cy="21" r="15.9155" fill="none" stroke="'+it.color+'" stroke-width="6" stroke-dasharray="'+p+' '+(100-p)+'" stroke-dashoffset="'+(25-cum)+'"></circle>';cum+=p;});
   return '<svg viewBox="0 0 42 42" class="donut"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--line)" stroke-width="6"></circle>'+c+'<text x="21" y="20.5" text-anchor="middle" class="dt1">Gastos</text><text x="21" y="26" text-anchor="middle" class="dt2">'+esc(nfc.format(tot))+'</text></svg>';
 }
-function bars(months){
-  var max=1;months.forEach(function(x){max=Math.max(max,x.inc,x.exp);});
+function bars(months,o){
+  o=o||{};var ak=o.a||'inc',bk=o.b||'exp',al=o.al||'Ingresos',bl=o.bl||'Gastos',ac=o.ac||'var(--in)',bc=o.bc||'var(--out)';
+  var max=1;months.forEach(function(x){max=Math.max(max,x[ak],x[bk]);});
   var W=340,H=150,pb=20,gw=W/months.length,bw=Math.min(16,gw/3),s='';
   months.forEach(function(x,i){
-    var cx=i*gw+gw/2,hi=x.inc/max*(H-pb-8),he=x.exp/max*(H-pb-8);
-    s+='<rect x="'+(cx-bw-1)+'" y="'+(H-pb-hi)+'" width="'+bw+'" height="'+Math.max(hi,x.inc?1.5:0)+'" rx="3" fill="var(--in)"><title>'+esc(monthLabel(x.m)+' · Ingresos: '+money(x.inc))+'</title></rect>';
-    s+='<rect x="'+(cx+1)+'" y="'+(H-pb-he)+'" width="'+bw+'" height="'+Math.max(he,x.exp?1.5:0)+'" rx="3" fill="var(--out)"><title>'+esc(monthLabel(x.m)+' · Gastos: '+money(x.exp))+'</title></rect>';
+    var cx=i*gw+gw/2,hi=x[ak]/max*(H-pb-8),he=x[bk]/max*(H-pb-8);
+    s+='<rect x="'+(cx-bw-1)+'" y="'+(H-pb-hi)+'" width="'+bw+'" height="'+Math.max(hi,x[ak]?1.5:0)+'" rx="3" fill="'+ac+'"><title>'+esc(monthLabel(x.m)+' · '+al+': '+money(x[ak]))+'</title></rect>';
+    s+='<rect x="'+(cx+1)+'" y="'+(H-pb-he)+'" width="'+bw+'" height="'+Math.max(he,x[bk]?1.5:0)+'" rx="3" fill="'+bc+'"><title>'+esc(monthLabel(x.m)+' · '+bl+': '+money(x[bk]))+'</title></rect>';
     s+='<text x="'+cx+'" y="'+(H-6)+'" text-anchor="middle" class="axl">'+monthShort(x.m)+'</text>';
   });
-  return '<svg viewBox="0 0 '+W+' '+H+'" class="bars">'+s+'</svg><div class="key"><span><i style="background:var(--in)"></i>Ingresos</span><span><i style="background:var(--out)"></i>Gastos</span></div>';
+  return '<svg viewBox="0 0 '+W+' '+H+'" class="bars">'+s+'</svg><div class="key"><span><i style="background:'+ac+'"></i>'+al+'</span><span><i style="background:'+bc+'"></i>'+bl+'</span></div>';
 }
 function progress(spent,limit){
   var p=limit>0?spent/limit*100:0,cls=p>=100?'over':p>=80?'warn':'';
@@ -373,6 +384,36 @@ reportes:function(){
    '<div class="card"><h3>Mayores gastos del mes</h3>'+(big.length?big.map(txRow).join(''):emptyCard('Sin gastos este mes'))+'</div></div>';
 },
 
+tarjeta:function(){
+  var cards=act('cards');
+  if(ui.card&&!isCardName(ui.card))ui.card='';
+  if(!cards.length){
+    return '<div class="card"><h3>💳 Control de tarjeta de crédito</h3><p class="note" style="margin:0 0 12px">Aquí verás cuánto gastas al mes con tu tarjeta: suscripciones, pagos automáticos y compras. Primero elige cuáles de tus cuentas son tarjetas de crédito.</p><div class="btns" style="justify-content:flex-start"><button class="btn primary" data-a="manageCards">Elegir mis tarjetas</button></div><p class="note">Después, al registrar un gasto o un fijo, pon como cuenta el nombre de la tarjeta para que cuente aquí.</p></div>';
+  }
+  var m=ui.month,list=cardTx(m),tot=sumAmt(list);
+  var subsTot=sumAmt(list.filter(function(t){return t.category==='Suscripciones';}));
+  var prevTot=sumAmt(cardTx(shiftMonth(m,-1))),ch=pctChange(tot,prevTot);
+  var months=lastMonths(m,6).map(function(x){var l=cardTx(x),t=sumAmt(l),r=sumAmt(l.filter(function(y){return y.fixedId;}));return {m:x,a:r,b:t-r,tot:t};});
+  var withData=months.filter(function(x){return x.tot>0;});
+  var avg=withData.length?withData.reduce(function(s,x){return s+x.tot;},0)/withData.length:0;
+  var fx=cardFixed().sort(function(a,b){return a.day-b.day;}),fxTot=sumAmt(fx);
+  var cats=byCategory(list),top=cats.slice(0,6).map(function(c){return {name:c.name,v:c.v,color:catColor(c.name)};});
+  var rest=cats.slice(6).reduce(function(s,c){return s+c.v;},0);if(rest>0)top.push({name:'Otras',v:rest,color:'#94a3b8'});
+  var h='<div class="tools">'+(cards.length>1?'<div class="chips"><button class="chip'+(ui.card?'':' on')+'" data-a="cardFilter" data-v="">Todas</button>'+cards.map(function(c){return '<button class="chip'+(norm(ui.card)===norm(c.name)?' on':'')+'" data-a="cardFilter" data-v="'+esc(c.name)+'">'+esc(c.name)+'</button>';}).join('')+'</div>':'')+'<button class="btn sm" data-a="manageCards" style="margin-left:auto">Administrar tarjetas</button></div>';
+  h+='<div class="grid g4" style="margin-bottom:14px">'+
+   '<div class="card kpi"><small>Gasto con tarjeta</small><b class="out">'+money(tot)+'</b><em>'+(ch===null?'&nbsp;':(ch>0?'↑ ':'↓ ')+Math.abs(ch)+'% vs mes anterior')+'</em></div>'+
+   '<div class="card kpi"><small>Promedio mensual</small><b>'+money(avg)+'</b><em>'+(withData.length?'últimos '+withData.length+(withData.length===1?' mes con gasto':' meses con gasto'):'sin datos todavía')+'</em></div>'+
+   '<div class="card kpi"><small>Cargos recurrentes / mes</small><b>'+money(fxTot)+'</b><em>'+money(fxTot*12)+' al año</em></div>'+
+   '<div class="card kpi"><small>Suscripciones del mes</small><b>'+money(subsTot)+'</b><em>categoría Suscripciones</em></div></div>';
+  h+='<div class="grid g2" style="margin-bottom:14px">'+
+   '<div class="card"><h3>Por categoría <small>'+monthLabel(m)+'</small></h3><div class="donutwrap">'+donut(top,tot)+'<div class="legend">'+top.map(function(c){return '<div><i style="background:'+c.color+'"></i><span>'+esc(c.name)+'</span><b>'+Math.round(c.v/tot*100)+'%</b></div>';}).join('')+'</div></div></div>'+
+   '<div class="card"><h3>Últimos 6 meses</h3>'+bars(months,{a:'a',b:'b',al:'Recurrentes',bl:'Compras',ac:'var(--brand)',bc:'var(--out)'})+'</div></div>';
+  h+='<div class="card" style="margin-bottom:14px"><h3>Cargos recurrentes en tarjeta <small>'+fx.length+(fx.length===1?' cargo':' cargos')+'</small></h3>'+(fx.length?fx.map(function(f){return '<button class="row" data-a="editFixed" data-id="'+esc(f.id)+'"><span class="ic" style="background:'+catColor(f.category)+'22">'+catIcon(f.category)+'</span><span class="grow"><b>'+esc(f.name)+'</b><small>Día '+esc(f.day)+' · '+esc(f.category)+' · '+esc(f.account)+'</small></span><b class="amt out">'+money(f.amount)+'</b></button>';}).join('')+'<div class="row" style="border-top:2px solid var(--line)"><span class="grow"><b>Total por mes</b></span><b class="amt out">'+money(fxTot)+'</b></div>':emptyCard('Aquí aparecen tus fijos activos con cuenta = tarjeta (suscripciones, pagos automáticos). Créalos en <b>Fijos</b>.'))+'</div>';
+  h+='<div class="card"><h3>Compras con tarjeta <small>'+monthLabel(m)+'</small></h3>'+(list.length?list.slice().sort(cmpTx).map(txRow).join(''):emptyCard('Sin gastos con tarjeta este mes. Al registrar un gasto, elige como cuenta el nombre de tu tarjeta.'))+'</div>';
+  h+='<p class="note">Solo cuentan las compras hechas con la tarjeta. El pago del extracto, que sale de tu cuenta bancaria, no se suma aquí para no duplicar el gasto.</p>';
+  return h;
+},
+
 ajustes:function(){
   var cats=act('categories');
   var catList=function(type){return cats.filter(function(c){return c.type===type;}).map(function(c){return '<button class="chip" data-a="editCat" data-id="'+esc(c.id)+'" style="border-color:'+esc(c.color)+'">'+esc(c.icon+' '+c.name)+'</button>';}).join('');};
@@ -410,9 +451,9 @@ function txListHtml(){
 
 /* ================= Render ================= */
 function renderNav(){
-  var h=NAV.map(function(n){return '<button class="nav" data-view="'+n[0]+'" data-a="goto" data-v="'+n[0]+'"><span class="i">'+n[1]+'</span><span>'+n[2]+'</span></button>';}).join('');
-  $('#side').innerHTML='<div class="logo">💚 FinanzasApp</div>'+h;
-  $('#bottom').innerHTML=h;
+  var mk=function(short){return NAV.map(function(n){return '<button class="nav" data-view="'+n[0]+'" data-a="goto" data-v="'+n[0]+'"><span class="i">'+n[1]+'</span><span>'+(short?(n[3]||n[2]):n[2])+'</span></button>';}).join('');};
+  $('#side').innerHTML='<div class="logo">💚 FinanzasApp</div>'+mk(false);
+  $('#bottom').innerHTML=mk(true);
 }
 function render(){
   document.querySelectorAll('[data-view]').forEach(function(b){b.classList.toggle('on',b.dataset.view===ui.view);});
@@ -542,6 +583,32 @@ function openCat(c){
   });
 }
 
+function openCards(){
+  var names={},arr=[];
+  accounts().forEach(function(a){names[norm(a)]=a;});
+  act('cards').forEach(function(c){names[norm(c.name)]=c.name;});
+  Object.keys(names).forEach(function(k){arr.push(names[k]);});
+  arr.sort(function(a,b){return a.localeCompare(b);});
+  openModal('<h3>Mis tarjetas de crédito</h3><form id="f" autocomplete="off"><p class="note" style="margin:0 0 10px">Marca las cuentas que son tarjetas de crédito. Sus gastos aparecerán en la sección Tarjeta.</p>'+
+   arr.map(function(a,i){return '<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:15px"><input type="checkbox" name="c'+i+'"'+(isCardName(a)?' checked':'')+'> '+esc(a)+'</label>';}).join('')+
+   '<label style="margin-top:6px">Agregar otra tarjeta<input name="nueva" maxlength="40" placeholder="Ej. Visa Bancolombia"></label>'+
+   '<div class="btns"><button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form>',
+  function(){
+    var fm=$('#f'),f=fm.elements;
+    fm.addEventListener('submit',function(e){
+      e.preventDefault();
+      arr.forEach(function(a,i){
+        var on=f['c'+i].checked,ex=act('cards').find(function(c){return norm(c.name)===norm(a);});
+        if(on&&!ex)put('cards',{id:uid('k'),name:a});
+        if(!on&&ex)del('cards',ex.id);
+      });
+      var nv=f.nueva.value.trim();
+      if(nv&&!isCardName(nv))put('cards',{id:uid('k'),name:nv});
+      closeModal();toast('Tarjetas guardadas');render();
+    });
+  });
+}
+
 /* ================= Acciones ================= */
 var actions={
   closeModal:closeModal,
@@ -574,6 +641,8 @@ var actions={
   delGoal:function(d){if(confirm('¿Eliminar esta meta?')){del('goals',d.id);closeModal();render();}},
   contrib:function(d){var g=find('goals',d.id);if(g)openContrib(g);},
   addCat:function(){openCat({});},
+  manageCards:function(){openCards();},
+  cardFilter:function(d){ui.card=d.v||'';render();},
   editCat:function(d){var c=find('categories',d.id);if(c)openCat(c);},
   delCat:function(d){
     var c=find('categories',d.id);if(!c)return;
