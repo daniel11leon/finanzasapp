@@ -241,7 +241,8 @@ function payFixed(f,m){
 }
 function accounts(){
   var seen={},out=[];
-  function add(n){n=String(n==null?'':n).trim();if(!n)return;var k=n.toLowerCase();if(seen[k])return;seen[k]=1;out.push(n);}
+  var hid=(settings.hiddenAccts||[]);
+  function add(n){n=String(n==null?'':n).trim();if(!n)return;var k=n.toLowerCase();if(seen[k])return;seen[k]=1;if(hid.indexOf(k)>=0&&!isCardName(n))return;out.push(n);}
   act('cards').forEach(function(c){add(c.name);});
   ['Efectivo','Cuenta bancaria','Tarjeta de crédito','Billetera digital'].forEach(add);
   act('transactions').forEach(function(t){add(t.account);});
@@ -522,7 +523,8 @@ function acctSelect(sel){
   list.sort(function(a,b){return (isCardName(a)?0:1)-(isCardName(b)?0:1)||a.localeCompare(b);});
   return '<label>Cuenta o medio de pago<select name="accountSel"><option value="">Sin cuenta</option>'+list.map(function(a){return '<option value="'+esc(a)+'"'+(norm(a)===norm(sel)?' selected':'')+'>'+(isCardName(a)?'💳 ':'')+esc(a)+'</option>';}).join('')+'<option value="__new">➕ Otra cuenta…</option></select></label><input name="accountNew" maxlength="40" placeholder="Nombre de la cuenta o tarjeta" style="display:none;margin:-6px 0 12px">';
 }
-function acctVal(f){return f.accountSel.value==='__new'?f.accountNew.value.trim():f.accountSel.value;}
+function unhideAcct(n){var k=norm(n),h=settings.hiddenAccts||[];if(h.indexOf(k)>=0){settings.hiddenAccts=h.filter(function(x){return x!==k;});saveSettings();}}
+function acctVal(f){var v=f.accountSel.value==='__new'?f.accountNew.value.trim():f.accountSel.value;if(v)unhideAcct(v);return v;}
 function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}
 
 function openTx(t){
@@ -638,7 +640,8 @@ function openCards(){
   openModal('<h3>Mis tarjetas de crédito</h3><form id="f" autocomplete="off">'+
    '<p class="note" style="margin:0 0 8px">Tarjetas guardadas</p>'+
    (cards.length?cards.map(function(c){return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:15px">💳 '+esc(c.name)+'</span><button type="button" class="btn sm danger" data-a="delCard" data-id="'+esc(c.id)+'" aria-label="Eliminar '+esc(c.name)+'">🗑️ Eliminar</button></div>';}).join(''):'<p class="note" style="margin:0 0 10px">Todavía no tienes tarjetas guardadas.</p>')+
-   (others.length?'<p class="note" style="margin:14px 0 8px">Marcar otra cuenta como tarjeta</p>'+others.map(function(a,i){return '<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:15px;margin-bottom:10px"><input type="checkbox" name="c'+i+'"> <span style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(a)+'</span></label>';}).join(''):'')+
+   (others.length?'<p class="note" style="margin:14px 0 8px">Marcar otra cuenta como tarjeta</p>'+others.map(function(a,i){return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="display:flex;flex:1;min-width:0;gap:10px;align-items:center;color:var(--text);font-size:15px;margin:0"><input type="checkbox" name="c'+i+'"> <span style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(a)+'</span></label><button type="button" class="btn sm danger" data-a="delAcct" data-name="'+esc(a)+'" aria-label="Eliminar '+esc(a)+'">🗑️ Eliminar</button></div>';}).join(''):'')+
+   ((settings.hiddenAccts||[]).length?'<p style="margin:0 0 10px"><button type="button" class="btn sm" data-a="restoreAccts">↩️ Restaurar cuentas eliminadas</button></p>':'')+
    '<label style="margin-top:8px">Agregar otra tarjeta<input name="nueva" maxlength="40" placeholder="Ej. Visa Bancolombia"></label>'+
    '<div class="btns"><button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
@@ -690,6 +693,12 @@ var actions={
     var c=find('cards',d.id);if(!c)return;
     if(confirm('¿Eliminar la tarjeta «'+c.name+'»? Sus movimientos se conservan, pero dejarán de contar en la sección Tarjeta.')){del('cards',c.id);toast('Tarjeta eliminada');render();openCards();}
   },
+  delAcct:function(d){
+    var n=d.name;if(!n)return;
+    if(confirm('¿Eliminar la cuenta «'+n+'» de la lista? Sus movimientos se conservan.')){
+      var h=settings.hiddenAccts||[];h.push(norm(n));settings.hiddenAccts=h;saveSettings();toast('Cuenta eliminada');render();openCards();}
+  },
+  restoreAccts:function(){settings.hiddenAccts=[];saveSettings();toast('Cuentas restauradas');render();openCards();},
   cardFilter:function(d){ui.card=d.v||'';render();},
   editCat:function(d){var c=find('categories',d.id);if(c)openCat(c);},
   delCat:function(d){
