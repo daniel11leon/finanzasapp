@@ -459,7 +459,7 @@ tarjeta:function(){
 
 ajustes:function(){
   var cats=act('categories');
-  var catList=function(type){return cats.filter(function(c){return c.type===type||c.type==='ambos';}).map(function(c){return '<button class="chip" data-a="editCat" data-id="'+esc(c.id)+'" style="border-color:'+esc(c.color)+'">'+esc(c.icon+' '+c.name)+'</button>';}).join('');};
+  var catList=function(type){return cats.filter(function(c){return c.type===type;}).map(function(c){return '<button class="chip" data-a="editCat" data-id="'+esc(c.id)+'" style="border-color:'+esc(c.color)+'">'+esc(c.icon+' '+c.name)+'</button>';}).join('');};
   return '<div class="card" style="margin-bottom:14px"><h3>Conexión con Google Sheets</h3>'+
    (HAS_GAS?'<p class="note" style="margin:0 0 8px">Estás usando la app desde Apps Script: se conecta sola a <b>DataFinanzasApp</b>.</p>':
    '<label>URL de la aplicación web (Apps Script)<input data-set="url" value="'+esc(settings.url)+'" placeholder="https://script.google.com/macros/s/.../exec"></label>'+
@@ -467,7 +467,7 @@ ajustes:function(){
    '<div class="btns" style="justify-content:flex-start"><button class="btn" data-a="testConn">Probar conexión</button><button class="btn primary" data-a="syncNow">Sincronizar ahora</button></div>'+
    '<p class="note">'+(settings.lastSync?'Última sincronización: '+new Date(settings.lastSync).toLocaleString('es-CO'):'Todavía no se ha sincronizado.')+' Sin conexión la app sigue funcionando y sincroniza cuando vuelva.</p></div>'+
    '<div class="card" style="margin-bottom:14px"><h3>Preferencias</h3><label>Moneda<select data-set="currency">'+Object.keys(CURRENCIES).map(function(c){return '<option'+(settings.currency===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></label></div>'+
-   '<div class="card" style="margin-bottom:14px"><h3>Categorías <button class="btn sm" data-a="addCat">+ Nueva</button></h3><p class="note" style="margin:0 0 6px">Gastos</p><div class="chips" style="margin-bottom:10px">'+catList('gasto')+'</div><p class="note" style="margin:0 0 6px">Ingresos</p><div class="chips">'+catList('ingreso')+'</div></div>'+
+   '<div class="card" style="margin-bottom:14px"><h3>Categorías <button class="btn sm" data-a="addCat">+ Nueva</button></h3><p class="note" style="margin:0 0 6px">Gastos</p><div class="chips" style="margin-bottom:10px">'+catList('gasto')+'</div><p class="note" style="margin:0 0 6px">Ingresos</p><div class="chips" style="margin-bottom:10px">'+catList('ingreso')+'</div><p class="note" style="margin:0 0 6px">Ambos (gasto e ingreso)</p><div class="chips">'+(catList('ambos')||'<span class="note" style="margin:0">Ninguna todavía. Cambia el tipo de una categoría a «Ambos» para verla aquí.</span>')+'</div></div>'+
    '<div class="card"><h3>Copias de seguridad</h3><div class="btns" style="justify-content:flex-start"><button class="btn" data-a="exportJson">Exportar JSON</button><button class="btn" data-a="exportCsv">Exportar movimientos (CSV)</button><button class="btn" data-a="importJson">Importar JSON</button><button class="btn danger" data-a="resetLocal">Borrar datos de este dispositivo</button></div><input type="file" id="file" accept="application/json" hidden></div>';
 }
 };
