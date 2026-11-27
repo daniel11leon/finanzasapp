@@ -222,7 +222,7 @@ function find(k,id){return db[k].find(function(x){return x.id===id&&!x.deleted;}
 function catObj(name){return db.categories.find(function(c){return c.name===name&&!c.deleted;})||db.categories.find(function(c){return c.name===name;});}
 function catIcon(n){var c=catObj(n);return c?c.icon:'📦';}
 function catColor(n){var c=catObj(n);return c&&/^#[0-9a-f]{6}$/i.test(c.color)?c.color:'#64748b';}
-function catsOf(type){return act('categories').filter(function(c){return c.type===type;});}
+function catsOf(type){return act('categories').filter(function(c){return c.type===type||c.type==='ambos';});}
 
 /* ================= Cálculos ================= */
 function txIn(m){return act('transactions').filter(function(t){return String(t.date).slice(0,7)===m;});}
@@ -459,7 +459,7 @@ tarjeta:function(){
 
 ajustes:function(){
   var cats=act('categories');
-  var catList=function(type){return cats.filter(function(c){return c.type===type;}).map(function(c){return '<button class="chip" data-a="editCat" data-id="'+esc(c.id)+'" style="border-color:'+esc(c.color)+'">'+esc(c.icon+' '+c.name)+'</button>';}).join('');};
+  var catList=function(type){return cats.filter(function(c){return c.type===type||c.type==='ambos';}).map(function(c){return '<button class="chip" data-a="editCat" data-id="'+esc(c.id)+'" style="border-color:'+esc(c.color)+'">'+esc(c.icon+' '+c.name)+'</button>';}).join('');};
   return '<div class="card" style="margin-bottom:14px"><h3>Conexión con Google Sheets</h3>'+
    (HAS_GAS?'<p class="note" style="margin:0 0 8px">Estás usando la app desde Apps Script: se conecta sola a <b>DataFinanzasApp</b>.</p>':
    '<label>URL de la aplicación web (Apps Script)<input data-set="url" value="'+esc(settings.url)+'" placeholder="https://script.google.com/macros/s/.../exec"></label>'+
@@ -631,7 +631,7 @@ function openContrib(g){
 }
 function openCat(c){
   var isNew=!c.id;c=Object.assign({name:'',type:'gasto',icon:'📦',color:'#0f766e'},c);
-  openModal('<h3>'+(isNew?'Nueva categoría':'Editar categoría')+'</h3><form id="f" autocomplete="off">'+(isNew?segHtml(c.type):'<input type="hidden" name="type" value="'+esc(c.type)+'">')+
+  openModal('<h3>'+(isNew?'Nueva categoría':'Editar categoría')+'</h3><form id="f" autocomplete="off">'+'<label>Tipo<select name="type"><option value="gasto"'+(c.type==='gasto'?' selected':'')+'>Gasto</option><option value="ingreso"'+(c.type==='ingreso'?' selected':'')+'>Ingreso</option><option value="ambos"'+(c.type==='ambos'?' selected':'')+'>Ambos (gasto e ingreso)</option></select></label>'+
    '<label>Nombre<input name="name" required maxlength="30" value="'+esc(c.name)+'"></label><div class="two"><label>Ícono (emoji)<input name="icon" maxlength="4" value="'+esc(c.icon)+'"></label><label>Color<input name="color" type="color" value="'+esc(/^#[0-9a-f]{6}$/i.test(c.color)?c.color:'#0f766e')+'"></label></div>'+
    '<div class="btns">'+(isNew?'':'<button type="button" class="btn danger left" data-a="delCat" data-id="'+esc(c.id)+'">Eliminar</button>')+'<button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
