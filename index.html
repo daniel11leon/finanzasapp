@@ -639,7 +639,7 @@ function openCards(){
   Object.keys(names).forEach(function(k){arr.push(names[k]);});
   arr.sort(function(a,b){return a.localeCompare(b);});
   openModal('<h3>Mis tarjetas de crédito</h3><form id="f" autocomplete="off"><p class="note" style="margin:0 0 10px">Marca las cuentas que son tarjetas de crédito. Sus gastos aparecerán en la sección Tarjeta.</p>'+
-   arr.map(function(a,i){return '<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:15px"><input type="checkbox" name="c'+i+'"'+(isCardName(a)?' checked':'')+'> '+esc(a)+'</label>';}).join('')+
+   arr.map(function(a,i){var ex=act('cards').find(function(c){return norm(c.name)===norm(a);});return '<div style="display:flex;align-items:center;gap:8px"><label style="flex:1;min-width:0;display:flex;gap:10px;align-items:center;color:var(--text);font-size:15px"><input type="checkbox" name="c'+i+'"'+(ex?' checked':'')+'> <span style="overflow:hidden;text-overflow:ellipsis">'+esc(a)+'</span></label>'+(ex?'<button type="button" class="btn sm danger" style="margin-bottom:12px" data-a="delCard" data-id="'+esc(ex.id)+'" aria-label="Eliminar '+esc(a)+'">🗑️ Eliminar</button>':'')+'</div>';}).join('')+
    '<label style="margin-top:6px">Agregar otra tarjeta<input name="nueva" maxlength="40" placeholder="Ej. Visa Bancolombia"></label>'+
    '<div class="btns"><button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
@@ -691,6 +691,10 @@ var actions={
   contrib:function(d){var g=find('goals',d.id);if(g)openContrib(g);},
   addCat:function(){openCat({});},
   manageCards:function(){openCards();},
+  delCard:function(d){
+    var c=find('cards',d.id);if(!c)return;
+    if(confirm('¿Eliminar la tarjeta «'+c.name+'»? Sus movimientos se conservan, pero dejarán de contar en la sección Tarjeta.')){del('cards',c.id);toast('Tarjeta eliminada');render();openCards();}
+  },
   cardFilter:function(d){ui.card=d.v||'';render();},
   editCat:function(d){var c=find('categories',d.id);if(c)openCat(c);},
   delCat:function(d){
