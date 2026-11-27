@@ -633,24 +633,19 @@ function openCat(c){
 }
 
 function openCards(){
-  var names={},arr=[];
-  accounts().forEach(function(a){names[norm(a)]=a;});
-  act('cards').forEach(function(c){names[norm(c.name)]=c.name;});
-  Object.keys(names).forEach(function(k){arr.push(names[k]);});
-  arr.sort(function(a,b){return a.localeCompare(b);});
-  openModal('<h3>Mis tarjetas de crédito</h3><form id="f" autocomplete="off"><p class="note" style="margin:0 0 10px">Marca las cuentas que son tarjetas de crédito. Sus gastos aparecerán en la sección Tarjeta.</p>'+
-   arr.map(function(a,i){var ex=act('cards').find(function(c){return norm(c.name)===norm(a);});return '<div style="display:flex;align-items:center;gap:8px"><label style="flex:1;min-width:0;display:flex;gap:10px;align-items:center;color:var(--text);font-size:15px"><input type="checkbox" name="c'+i+'"'+(ex?' checked':'')+'> <span style="overflow:hidden;text-overflow:ellipsis">'+esc(a)+'</span></label>'+(ex?'<button type="button" class="btn sm danger" style="margin-bottom:12px" data-a="delCard" data-id="'+esc(ex.id)+'" aria-label="Eliminar '+esc(a)+'">🗑️ Eliminar</button>':'')+'</div>';}).join('')+
-   '<label style="margin-top:6px">Agregar otra tarjeta<input name="nueva" maxlength="40" placeholder="Ej. Visa Bancolombia"></label>'+
+  var cards=act('cards').slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+  var others=accounts().filter(function(a){return !isCardName(a);}).sort(function(a,b){return a.localeCompare(b);});
+  openModal('<h3>Mis tarjetas de crédito</h3><form id="f" autocomplete="off">'+
+   '<p class="note" style="margin:0 0 8px">Tarjetas guardadas</p>'+
+   (cards.length?cards.map(function(c){return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:15px">💳 '+esc(c.name)+'</span><button type="button" class="btn sm danger" data-a="delCard" data-id="'+esc(c.id)+'" aria-label="Eliminar '+esc(c.name)+'">🗑️ Eliminar</button></div>';}).join(''):'<p class="note" style="margin:0 0 10px">Todavía no tienes tarjetas guardadas.</p>')+
+   (others.length?'<p class="note" style="margin:14px 0 8px">Marcar otra cuenta como tarjeta</p>'+others.map(function(a,i){return '<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:15px;margin-bottom:10px"><input type="checkbox" name="c'+i+'"> <span style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(a)+'</span></label>';}).join(''):'')+
+   '<label style="margin-top:8px">Agregar otra tarjeta<input name="nueva" maxlength="40" placeholder="Ej. Visa Bancolombia"></label>'+
    '<div class="btns"><button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
     var fm=$('#f'),f=fm.elements;
     fm.addEventListener('submit',function(e){
       e.preventDefault();
-      arr.forEach(function(a,i){
-        var on=f['c'+i].checked,ex=act('cards').find(function(c){return norm(c.name)===norm(a);});
-        if(on&&!ex)put('cards',{id:uid('k'),name:a});
-        if(!on&&ex)del('cards',ex.id);
-      });
+      others.forEach(function(a,i){if(f['c'+i].checked&&!isCardName(a))put('cards',{id:uid('k'),name:a});});
       var nv=f.nueva.value.trim();
       if(nv&&!isCardName(nv))put('cards',{id:uid('k'),name:nv});
       closeModal();toast('Tarjetas guardadas');render();
