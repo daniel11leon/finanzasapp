@@ -535,6 +535,7 @@ function openTx(t){
    '<label>Categoría<select name="category">'+catOptions(t.type,t.category)+'</select></label>'+
    '<label>Fecha<input name="date" type="date" required value="'+esc(t.date)+'"></label>'+acctSelect(t.account)+
    '<label>Descripción<input name="description" maxlength="80" placeholder="Opcional" value="'+esc(t.description)+'"></label>'+
+   (t.fixedId?'<p class="note" style="margin:0 0 12px">🔁 Este movimiento viene de un gasto fijo.</p>':'<label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" name="mkFixed"> 🔁 Repetir cada mes (convertir en fijo)</label>')+
    '<div class="btns">'+(isNew?'':'<button type="button" class="btn danger left" data-a="delTx" data-id="'+esc(t.id)+'">Eliminar</button>')+'<button type="button" class="btn" data-a="closeModal">Cancelar</button>'+(isNew?'<button type="submit" class="btn" data-more="1">Guardar y otro</button>':'')+'<button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
     var fm=$('#f'),f=fm.elements;f.amount.focus();
@@ -544,8 +545,13 @@ function openTx(t){
       e.preventDefault();
       var amount=num(f.amount.value);if(amount<=0){toast('Ingresa un monto mayor a 0');return;}
       if(!f.category.value){toast('Crea una categoría primero (Ajustes)');return;}
-      put('transactions',{id:t.id||uid('t'),date:f.date.value,type:f.type.value,amount:amount,category:f.category.value,description:f.description.value.trim(),account:acctVal(f),fixedId:t.fixedId||''});
-      toast('Guardado');
+      var acc=acctVal(f),fid=t.fixedId||'',madeFixed=false;
+      if(!fid&&f.mkFixed&&f.mkFixed.checked){
+        fid=uid('f');madeFixed=true;
+        put('fixed',{id:fid,name:f.description.value.trim()||f.category.value,type:f.type.value,amount:amount,day:Math.min(31,Math.max(1,parseInt(String(f.date.value).slice(8,10),10)||1)),category:f.category.value,account:acc,active:1});
+      }
+      put('transactions',{id:t.id||uid('t'),date:f.date.value,type:f.type.value,amount:amount,category:f.category.value,description:f.description.value.trim(),account:acc,fixedId:fid});
+      toast(madeFixed?'Guardado y agregado a Fijos':'Guardado');
       if(more){openTx({type:f.type.value,date:f.date.value,account:acctVal(f)});}else closeModal();
       render();
     });
