@@ -773,7 +773,7 @@ document.addEventListener('change',function(e){
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('#modal').classList.contains('hidden'))closeModal();});
 
 /* ================= Sincronización con Google Sheets ================= */
-var syncing=false,pendingSync=false,syncTimer=null,syncState='local',syncMsg='';
+var syncing=false,pendingSync=false,syncTimer=null,retryTimer=null,retryN=0,syncState='local',syncMsg='';
 function canSync(){return HAS_GAS||(settings.url&&settings.token);}
 function api(payload){
   if(HAS_GAS){
@@ -810,9 +810,10 @@ async function syncNow(manual){
     if(!res||!res.ok)throw new Error(res&&res.error||'Respuesta inválida');
     mergeRemote(res.data);
     settings.lastPush=start;settings.lastSync=Date.now();saveSettings();save();
-    syncState='ok';syncMsg='';if(manual)toast('Sincronizado ✓');
+    syncState='ok';syncMsg='';retryN=0;clearTimeout(retryTimer);if(manual)toast('Sincronizado ✓');
     render();
-  }catch(err){syncState='error';syncMsg=err.message||String(err);if(manual)toast('Error al sincronizar: '+syncMsg);}
+  }catch(err){syncState='error';syncMsg=err.message||String(err);if(manual)toast('Error al sincronizar: '+syncMsg);
+    clearTimeout(retryTimer);retryTimer=setTimeout(function(){syncNow(false);},Math.min(60000,5000*Math.pow(2,retryN)));retryN=Math.min(retryN+1,4);}
   finally{syncing=false;updateSyncBadge();if(pendingSync){pendingSync=false;scheduleSync();}}
 }
 function updateSyncBadge(){
@@ -820,7 +821,7 @@ function updateSyncBadge(){
   var txt='Solo local',cls='';
   if(canSync()){
     if(syncState==='syncing'){txt='🔄 Sincronizando…';}
-    else if(syncState==='error'){txt='⚠️ Sin sincronizar';cls='error';b.title=syncMsg;}
+    else if(syncState==='error'){txt='⚠️ Sin sincronizar · reintentando';cls='error';b.title=syncMsg;}
     else if(settings.lastSync){var d=new Date(settings.lastSync);txt='✓ Sincronizado '+pad(d.getHours())+':'+pad(d.getMinutes());cls='ok';}
     else txt='Pendiente de sincronizar';
   }else txt='Solo local · configurar';
@@ -828,6 +829,8 @@ function updateSyncBadge(){
 }
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&canSync()&&Date.now()-settings.lastSync>60000)syncNow(false);});
 window.addEventListener('online',function(){if(canSync())syncNow(false);});
+window.addEventListener('focus',function(){if(canSync()&&Date.now()-settings.lastSync>60000)syncNow(false);});
+setInterval(function(){if(!document.hidden&&canSync()&&!syncing&&Date.now()-settings.lastSync>120000)syncNow(false);},60000);
 
 /* ================= Inicio ================= */
 if('serviceWorker' in navigator&&!HAS_GAS&&(location.protocol==='https:'||location.hostname==='localhost')){navigator.serviceWorker.register('sw.js').catch(function(){});}
