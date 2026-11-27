@@ -1,6 +1,6 @@
 /* Service worker de FinanzasApp: deja abrir la app sin internet.
    Solo toca archivos de este mismo sitio; las llamadas a Google Sheets pasan directo. */
-var CACHE = 'finanzasapp-v1';
+var CACHE = 'finanzasapp-v2';
 var CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', function (e) {
@@ -22,7 +22,7 @@ self.addEventListener('fetch', function (e) {
   if (url.origin !== self.location.origin) return;
   // red primero (para recibir actualizaciones); si no hay internet, copia guardada
   e.respondWith(
-    fetch(req).then(function (res) {
+    fetch(req, { cache: 'no-cache' }).then(function (res) {
       var copy = res.clone();
       caches.open(CACHE).then(function (c) { c.put(req, copy); });
       return res;

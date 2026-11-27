@@ -157,7 +157,7 @@ var LS_DATA='finanzasapp.data.v1', LS_SET='finanzasapp.settings.v1';
 var CURRENCIES={COP:'es-CO',USD:'en-US',EUR:'es-ES',MXN:'es-MX',ARS:'es-AR',PEN:'es-PE',CLP:'es-CL',BRL:'pt-BR'};
 var ZERO_DEC=['COP','CLP'];
 var MONTHS=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-var NAV=[['resumen','📊','Resumen'],['movimientos','🧾','Movimientos','Movim.'],['fijos','🔁','Fijos'],['tarjeta','💳','Tarjeta'],['presupuestos','🎯','Presupuestos','Presup.'],['metas','🏁','Metas'],['reportes','📈','Reportes'],['ajustes','⚙️','Ajustes']];
+var NAV=[['resumen','📊','Resumen'],['movimientos','🧾','Movimientos','Movim.'],['fijos','🔁','Fijos'],['tarjeta','💳','Tarjeta'],['presupuestos','🎯','Presupuestos','Presup.'],['metas','🐷','Ahorros'],['reportes','📈','Reportes'],['ajustes','⚙️','Ajustes']];
 var DEF_CATS=[
  ['gasto','Alimentación','🛒','#16a34a'],['gasto','Restaurantes','🍽️','#f97316'],['gasto','Transporte','🚌','#0ea5e9'],
  ['gasto','Vivienda','🏠','#8b5cf6'],['gasto','Servicios','💡','#eab308'],['gasto','Salud','🩺','#ef4444'],
@@ -345,7 +345,7 @@ resumen:function(){
   h+='<div class="card"><h3>Fijos pendientes <small>'+pend.length+' por registrar</small></h3>'+(pend.length?pend.slice(0,5).map(function(f){var st=fixedStatus(f,m);return '<div class="row"><span class="ic">'+catIcon(f.category)+'</span><span class="grow"><b>'+esc(f.name)+'</b><small>Día '+esc(f.day)+' · '+(f.type==='gasto'?'gasto':'ingreso')+'</small></span><span class="pill '+st+'">'+st+'</span><b class="amt">'+money(f.amount)+'</b><button class="btn sm" data-a="payFixed" data-id="'+esc(f.id)+'">Registrar</button></div>';}).join(''):emptyCard(act('fixed').length?'Todo al día este mes ✓':'Aún no tienes gastos fijos'))+'</div>';
   h+='<div class="card"><h3>Presupuestos <small>'+monthLabel(m)+(all?'':' · todas las cuentas')+'</small></h3>'+(buds.length?buds.map(function(x){var l=x.b.limit;return '<div style="padding:7px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>'+catIcon(x.b.category)+' '+esc(x.b.category)+'</span><span class="'+(x.spent>l?'neg':'')+'"><b>'+money(x.spent)+'</b> / '+money(l)+'</span></div>'+progress(x.spent,l)+'</div>';}).join(''):emptyCard('Define límites en <b>Presupuestos</b>'))+'</div></div>';
   h+='<div class="grid g2"><div class="card"><h3>Movimientos recientes <button class="btn sm" data-a="goto" data-v="movimientos">Ver todos</button></h3>'+(recent.length?recent.map(txRow).join(''):emptyCard('Sin movimientos de esta cuenta en el mes'))+'</div>';
-  h+='<div class="card"><h3>Metas de ahorro <button class="btn sm" data-a="goto" data-v="metas">Ver</button></h3>'+(goals.length?goals.map(function(g){var p=g.target>0?Math.min(100,g.saved/g.target*100):0;return '<div style="padding:7px 0"><div style="display:flex;justify-content:space-between"><span>🏁 '+esc(g.name)+'</span><b>'+Math.round(p)+'%</b></div>'+progress(g.saved,g.target)+'</div>';}).join(''):emptyCard('Crea tu primera meta de ahorro'))+'</div></div>';
+  h+='<div class="card"><h3>Ahorros <button class="btn sm" data-a="goto" data-v="metas">Ver</button></h3>'+(goals.length?goals.map(function(g){var has=g.target>0,p=has?Math.min(100,g.saved/g.target*100):0;return '<div style="padding:7px 0"><div style="display:flex;justify-content:space-between"><span>🐷 '+esc(g.name)+'</span><b>'+(has?Math.round(p)+'%':money(g.saved))+'</b></div>'+(has?progress(g.saved,g.target):'')+'</div>';}).join(''):emptyCard('Crea tu primer ahorro'))+'</div></div>';
   return h;
 },
 
@@ -389,16 +389,16 @@ presupuestos:function(){
 
 metas:function(){
   var gs=act('goals');
-  return '<div class="tools"><button class="btn primary" data-a="addGoal">+ Nueva meta</button></div>'+
+  return '<div class="tools"><button class="btn primary" data-a="addGoal">+ Nuevo ahorro</button></div>'+
    (gs.length?'<div class="grid g2">'+gs.map(function(g){
-     var p=g.target>0?Math.min(100,g.saved/g.target*100):0,left=Math.max(0,g.target-g.saved),extra='';
-     if(g.deadline){var now=new Date(),d=g.deadline.split('-').map(Number),ml=(d[0]-now.getFullYear())*12+(d[1]-(now.getMonth()+1));
+     var has=g.target>0,p=has?Math.min(100,g.saved/g.target*100):0,left=Math.max(0,g.target-g.saved),extra='';
+     if(has&&g.deadline){var now=new Date(),d=g.deadline.split('-').map(Number),ml=(d[0]-now.getFullYear())*12+(d[1]-(now.getMonth()+1));
        if(left>0&&ml>=1)extra='Para llegar a tiempo: <b>'+money(left/ml)+'</b> por mes ('+ml+' '+(ml===1?'mes':'meses')+')';
        else if(left>0)extra='<span class="neg">Fecha límite vencida o este mes</span>';}
-     return '<div class="card"><h3><span>🏁 '+esc(g.name)+'</span><b>'+Math.round(p)+'%</b></h3><div style="display:flex;justify-content:space-between"><b>'+money(g.saved)+'</b><span style="color:var(--muted)">de '+money(g.target)+'</span></div>'+progress(g.saved,g.target)+
-      '<p class="note">'+(left>0?'Faltan '+money(left):'¡Meta cumplida! 🎉')+(g.deadline?' · hasta '+esc(g.deadline):'')+'</p>'+(extra?'<p class="note">'+extra+'</p>':'')+
+     return '<div class="card"><h3><span>🐷 '+esc(g.name)+'</span>'+(has?'<b>'+Math.round(p)+'%</b>':'')+'</h3><div style="display:flex;justify-content:space-between"><b>'+money(g.saved)+'</b>'+(has?'<span style="color:var(--muted)">de '+money(g.target)+'</span>':'')+'</div>'+(has?progress(g.saved,g.target):'')+
+      '<p class="note">'+(has?(left>0?'Faltan '+money(left):'¡Objetivo cumplido! 🎉'):'Sin objetivo definido')+(g.deadline?' · hasta '+esc(g.deadline):'')+'</p>'+(extra?'<p class="note">'+extra+'</p>':'')+
       '<div class="btns"><button class="btn sm" data-a="editGoal" data-id="'+esc(g.id)+'">Editar</button><button class="btn sm primary" data-a="contrib" data-id="'+esc(g.id)+'">Abonar</button></div></div>';
-   }).join('')+'</div>':'<div class="card">'+emptyCard('Crea una meta (viaje, fondo de emergencia, etc.) y ve abonando.')+'</div>');
+   }).join('')+'</div>':'<div class="card">'+emptyCard('Crea un ahorro (viaje, fondo de emergencia, etc.) y ve abonando.')+'</div>');
 },
 
 reportes:function(){
@@ -595,27 +595,27 @@ function openBudget(b){
 }
 function openGoal(g){
   var isNew=!g.id;g=Object.assign({name:'',target:'',saved:0,deadline:''},g);
-  openModal('<h3>'+(isNew?'Nueva meta de ahorro':'Editar meta')+'</h3><form id="f"><label>Nombre<input name="name" required maxlength="60" placeholder="Viaje, fondo de emergencia…" value="'+esc(g.name)+'"></label>'+
-   '<div class="two"><label>Objetivo<input name="target" type="number" inputmode="decimal" step="any" min="1" required value="'+esc(g.target)+'"></label><label>Ahorrado hasta hoy<input name="saved" type="number" inputmode="decimal" step="any" min="0" value="'+esc(g.saved)+'"></label></div>'+
+  openModal('<h3>'+(isNew?'Nuevo ahorro':'Editar ahorro')+'</h3><form id="f"><label>Nombre<input name="name" required maxlength="60" placeholder="Viaje, fondo de emergencia…" value="'+esc(g.name)+'"></label>'+
+   '<div class="two"><label>Objetivo (opcional)<input name="target" type="number" inputmode="decimal" step="any" min="0" value="'+(g.target>0?esc(g.target):'')+'"></label><label>Ahorrado hasta hoy<input name="saved" type="number" inputmode="decimal" step="any" min="0" value="'+esc(g.saved)+'"></label></div>'+
    '<label>Fecha límite (opcional)<input name="deadline" type="date" value="'+esc(g.deadline)+'"></label>'+
    '<div class="btns">'+(isNew?'':'<button type="button" class="btn danger left" data-a="delGoal" data-id="'+esc(g.id)+'">Eliminar</button>')+'<button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form>',
   function(){
     var fm=$('#f'),f=fm.elements;f.name.focus();
     fm.addEventListener('submit',function(e){
-      e.preventDefault();var t=num(f.target.value);if(t<=0){toast('El objetivo debe ser mayor a 0');return;}
+      e.preventDefault();var t=Math.max(0,num(f.target.value));
       put('goals',{id:g.id||uid('g'),name:f.name.value.trim(),target:t,saved:Math.max(0,num(f.saved.value)),deadline:f.deadline.value||''});
       closeModal();toast('Guardado');render();
     });
   });
 }
 function openContrib(g){
-  openModal('<h3>Abonar a «'+esc(g.name)+'»</h3><form id="f"><label>Monto (usa negativo para retirar)<input name="amt" type="number" inputmode="decimal" step="any" required></label><div class="hint" id="amtHint"></div><p class="note" style="margin:0 0 10px">Llevas '+money(g.saved)+' de '+money(g.target)+'.</p>'+
+  openModal('<h3>Abonar a «'+esc(g.name)+'»</h3><form id="f"><label>Monto (usa negativo para retirar)<input name="amt" type="number" inputmode="decimal" step="any" required></label><div class="hint" id="amtHint"></div><p class="note" style="margin:0 0 10px">Llevas '+money(g.saved)+(g.target>0?' de '+money(g.target):'')+'.</p>'+
    '<div class="btns"><button type="button" class="btn" data-a="closeModal">Cancelar</button><button type="submit" class="btn primary">Aplicar</button></div></form>',
   function(){
     var fm=$('#f'),f=fm.elements;f.amt.focus();
     fm.addEventListener('submit',function(e){
       e.preventDefault();var a=num(f.amt.value);if(!a){toast('Ingresa un monto');return;}
-      put('goals',Object.assign({},g,{saved:Math.max(0,Number(g.saved)+a)}));closeModal();toast('Meta actualizada');render();
+      put('goals',Object.assign({},g,{saved:Math.max(0,Number(g.saved)+a)}));closeModal();toast('Ahorro actualizado');render();
     });
   });
 }
@@ -691,7 +691,7 @@ var actions={
   delBudget:function(d){if(confirm('¿Eliminar este presupuesto?')){del('budgets',d.id);closeModal();render();}},
   addGoal:function(){openGoal({});},
   editGoal:function(d){var g=find('goals',d.id);if(g)openGoal(g);},
-  delGoal:function(d){if(confirm('¿Eliminar esta meta?')){del('goals',d.id);closeModal();render();}},
+  delGoal:function(d){if(confirm('¿Eliminar este ahorro?')){del('goals',d.id);closeModal();render();}},
   contrib:function(d){var g=find('goals',d.id);if(g)openContrib(g);},
   addCat:function(){openCat({});},
   manageCards:function(){openCards();},
